@@ -1,0 +1,67 @@
+# Drift-detector config.
+#
+# Keyed by ASPECT TYPE, not by bucket. The engine finds EVERY instance of each
+# state_type in the Terraform state file and monitors it — so adding a new
+# bucket (with a public-access-block) in your .tf makes it monitored
+# automatically, with no change here.
+#
+# attributes: listed by their STATE-file (snake_case) name. The engine maps
+# each to the live boto3 (PascalCase) name automatically. Only add an explicit
+# `live:` when AWS's capitalization doesn't match naive snake->Pascal
+# (acronyms like ACL/KMS/DNS, or genuinely different names).
+
+resource_types:
+  s3_public_access_block:
+    resource_type: S3 Bucket
+    state_type: aws_s3_bucket_public_access_block   # how instances are found in state
+    api: get_public_access_block 
+    parameter: Bucket                   # boto3 s3 client call
+    response_key: PublicAccessBlockConfiguration    # where values sit in the API response
+    id_attribute: bucket                            # state attr that names the bucket + is the API arg
+    attributes:
+      - block_public_acls
+      - block_public_policy
+      - ignore_public_acls
+      - restrict_public_buckets
+
+  s3_bucket_versioning:
+    resource_type: S3 Bucket
+    state_type: aws_s3_bucket_versioning
+    api: get_bucket_versioning
+    parameter: Bucket
+    response_key: null            # values sit at the response root
+    id_attribute: bucket
+    attributes:
+      - name: status
+        live: Status
+        state_path: versioning_configuration.0.status
+
+  ec2_instance:
+    resource_type: EC2 Instance
+    state_type: aws_instance
+    api: describe_instances
+    parameter: InstanceIds
+    param_style: list                       # InstanceIds=[id], not =id
+    response_path: Reservations.0.Instances.0   # nested, uses dig()
+    id_attribute: id
+    attributes:
+      - instance_type                       # flat, snake->Pascal auto = InstanceType
+
+  security_group:
+    resource_type: Security Group
+    state_type: aws_security_group
+    id_attribute: id
+    handler: security_group        # <- routes to the Python handler, not scalar path
+    # no api/parameter/attributes needed — the handler owns fetching + comparison
+
+clients:
+  S3 Bucket:
+    client: client
+    service: s3
+  EC2 Instance:
+    client: client
+    service: ec2
+  Security Group:
+    client: client
+    service: ec2  
+
