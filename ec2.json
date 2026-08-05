@@ -1,0 +1,41 @@
+{
+    "SecurityGroups": [
+        {
+            "GroupId": "sg-0f1c6c9cd325c8243",
+            "IpPermissionsEgress": [
+                {
+                    "IpProtocol": "-1",
+                    "UserIdGroupPairs": [],
+                    "IpRanges": [
+                        {
+                            "CidrIp": "0.0.0.0/0"
+                        }
+                    ],
+                    "Ipv6Ranges": [],
+                    "PrefixListIds": []
+                }
+            ],
+            "VpcId": "vpc-0fd93b5dffd556a58",
+            "SecurityGroupArn": "arn:aws:ec2:us-east-1:050027656361:security-group/sg-0f1c6c9cd325c8243",
+            "OwnerId": "050027656361",
+            "GroupName": "drift-dashboard-sg",
+            "Description": "Dashboard ingress on 8501",
+            "IpPermissions": [
+                {
+                    "IpProtocol": "tcp",
+                    "FromPort": 8501,
+                    "ToPort": 8501,
+                    "UserIdGroupPairs": [],
+                    "IpRanges": [
+                        {
+                            "Description": "Streamlit",
+                            "CidrIp": "0.0.0.0/0"
+                        }
+                    ],
+                    "Ipv6Ranges": [],
+                    "PrefixListIds": []
+                }
+            ]
+        }
+    ]
+}
