@@ -8,6 +8,8 @@ detector.zip
 
 .terraform/
 
+expressions.txt
+
 layer/python/
 __pycache__/
 *.tfstate*
