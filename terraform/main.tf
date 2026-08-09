@@ -10,8 +10,10 @@ terraform {
   }
 
   backend "s3" {
+  # NOTE: backend blocks cannot use variables — Terraform reads this before variables exist. This bucket name must be kept in sync with var.state_bucket.
+
     bucket       = "drift-detector-tfstate-anushka"   # Terraform state bucket
-    key          = "drift-detector/terraform.tfstate"
+    key          = "drift-detector/terraform.tfstate" # where the state file is stored
     region       = "us-east-1"
     use_lockfile = true
   }
@@ -23,6 +25,7 @@ variable "alert_email" {
 }
 
 variable "state_bucket"      { type = string }
+variable "state_key" {type = string}
 variable "monitored_bucket"  { type = string }
 variable "slack_webhook_url" {
   type      = string
@@ -36,7 +39,7 @@ provider "aws" {
 
 # ---------- Block 3: The monitored bucket ----------
 resource "aws_s3_bucket" "monitored" {
-  bucket = "drift-detector-monitored-anushka"   
+  bucket = var.monitored_bucket
 }
 
 # ---------- Block 4: The public access block actually being monitor ----------
@@ -57,7 +60,7 @@ resource "aws_s3_bucket_versioning" "monitored" {
 }
 
 
-#Latest Amazon Linux 2023 AMI at apply time 
+#Get the latest Amazon Linux 2023 AMI at apply time 
 data "aws_ami" "al2023" {
   most_recent = true
   owners      = ["amazon"]
@@ -103,6 +106,9 @@ resource "aws_security_group" "monitored" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 }
+
+
+# All the below definitions are for monitoring infrastructure - Lambda function, DynamoDB, SNS, Dashboard & EventBridge
 
 
 # ---------- Block 5: DynamoDB table for drift history ----------
@@ -169,7 +175,7 @@ resource "aws_iam_role" "detector" {
   })
 }
 
-# ---------- Block 9: Permissions policy (WHAT it can do) ----------
+# ---------- Block 9: Permissions policy  ----------
 resource "aws_iam_role_policy" "detector" {
   name = "drift-detector-permissions"
   role = aws_iam_role.detector.id
@@ -198,13 +204,13 @@ resource "aws_iam_role_policy" "detector" {
         Sid      = "DescribeEC2"
         Effect   = "Allow"
         Action   = ["ec2:DescribeInstances"]
-        Resource = "*"          # see the flag below — EC2 describe can't be resource-scoped
+        Resource = "*"          
       },
       {
         Sid      = "DescribeSecurityGroups"
         Effect   = "Allow"
         Action   = ["ec2:DescribeSecurityGroups"]
-        Resource = "*"          # describe actions can't be resource-scoped (same as DescribeInstances)
+        Resource = "*"          
       },
       {
         Sid      = "WriteDriftHistory"
@@ -243,7 +249,7 @@ resource "aws_lambda_function" "detector" {
   environment {
     variables = {
       STATE_BUCKET              = var.state_bucket
-      STATE_KEY                 = "drift-detector/terraform.tfstate"
+      STATE_KEY                 = var.state_key
       MONITORED_BUCKET          = var.monitored_bucket
       TABLE_NAME                = aws_dynamodb_table.drift_history.name
       SNS_TOPIC_ARN             = aws_sns_topic.drift_alerts.arn
@@ -265,7 +271,7 @@ resource "aws_cloudwatch_event_target" "lambda" {
   arn  = aws_lambda_function.detector.arn
 }
 
-# ---------- Block 13: Let EventBridge invoke the Lambda (the forgotten piece) ----------
+# ---------- Block 13: Let EventBridge invoke the Lambda ----------
 resource "aws_lambda_permission" "allow_eventbridge" {
   statement_id  = "AllowEventBridgeInvoke"
   action        = "lambda:InvokeFunction"
@@ -275,6 +281,7 @@ resource "aws_lambda_permission" "allow_eventbridge" {
 }
 
 
+#----------- Block 14: Create private container repo to push & pull image from-----
 resource "aws_ecr_repository" "dashboard" {
   name                 = "drift-dashboard"
   image_tag_mutability = "MUTABLE"

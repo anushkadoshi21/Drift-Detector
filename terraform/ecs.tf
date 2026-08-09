@@ -9,6 +9,11 @@ data "aws_subnets" "default" {
   }
 }
 
+variable "dashboard_ingress_cidr" {
+  description = "CIDR allowed to reach the dashboard."
+  type        = string
+}
+
 # ---------- CloudWatch log group ----------
 resource "aws_cloudwatch_log_group" "dashboard" {
   name              = "/ecs/drift-dashboard"
@@ -36,11 +41,6 @@ resource "aws_security_group" "dashboard" {
   }
 }
 
-variable "dashboard_ingress_cidr" {
-  description = "CIDR allowed to reach the dashboard."
-  type        = string
-}
-
 # ---------- Role 1: Execution role (ECS agent pulls image, writes logs) ----------
 resource "aws_iam_role" "ecs_execution" {
   name = "drift-dashboard-execution"
@@ -57,7 +57,7 @@ resource "aws_iam_role_policy_attachment" "ecs_execution" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-# ---------- Role 2: TASK role (your CODE reads DynamoDB) ----------
+# ---------- Role 2: TASK role for reading dynamodb table  ----------
 resource "aws_iam_role" "ecs_task" {
   name = "drift-dashboard-task"
   assume_role_policy = jsonencode({
@@ -127,6 +127,6 @@ resource "aws_ecs_service" "dashboard" {
   network_configuration {
     subnets          = data.aws_subnets.default.ids
     security_groups  = [aws_security_group.dashboard.id]
-    assign_public_ip = true          # <-- REQUIRED to reach it without a load balancer
+    assign_public_ip = true          
   }
 }
