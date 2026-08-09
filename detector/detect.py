@@ -11,11 +11,6 @@ try:
 except ImportError:
     pass          # platform sets env vars on Lambda
 
-# ---- config: the script needs to know ----
-# STATE_BUCKET = os.getenv("STATE_BUCKET", "drift-detector-tfstate-anushka")      # State Bucket
-# STATE_KEY    = os.getenv("STATE_KEY", "drift-detector/terraform.tfstate")            # exact key to it
-# MONITORED_BUCKET = os.getenv("MONITORED_BUCKET", "drift-detector-monitored-anushka")  
-# RESOURCE_ID = os.getenv("RESOURCE_ID", "aws_s3_bucket_public_access_block.monitored")
 TABLE_NAME  = os.getenv("TABLE_NAME", "drift-detector-history")
 RENOTIFY_INTERVAL_SECONDS = int(os.getenv("RENOTIFY_INTERVAL_SECONDS", 120))
 SNS_TOPIC_ARN= os.getenv("SNS_TOPIC_ARN",    "REDACTED")
@@ -23,14 +18,6 @@ SNS_TOPIC_ARN= os.getenv("SNS_TOPIC_ARN",    "REDACTED")
 sns = boto3.client("sns")
 dynamodb = boto3.resource("dynamodb")
 s3 = boto3.client("s3")
-
-# the four attributes we monitor, by their state-file names
-# PAB_KEYS = [
-#     "block_public_acls",
-#     "block_public_policy",
-#     "ignore_public_acls",
-#     "restrict_public_buckets",
-# ]
 
 def now_iso():
     return datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -74,6 +61,24 @@ def process(resource_id, resource_name, aspect, resource_type, drift):
             table.put_item(Item=rec)
             notify("Drift RESOLVED", f"{resource_id} back in sync.")
             print("✅ Resolved — record updated.")
+        elif rec is None:
+            # NEW: never-seen, in-sync resource — record a baseline so the
+            # dashboard shows it from the first run. Status RESOLVED + empty
+            # history is how the dashboard distinguishes "never drifted" from
+            # "was drifting, now fixed".
+            table.put_item(Item={
+                "resource_id": resource_id,
+                "resource_name": resource_name,
+                "resource_type": resource_type,
+                "aspect": aspect,
+                "status": "RESOLVED",
+                "current_attributes": [],
+                "history": [],
+                "first_seen": now,
+                "last_seen": now,
+            })
+            print("✅ In sync — baseline recorded.")
+            print("✅ No drift.")
         else:
             print("✅ No drift.")
         return
@@ -144,50 +149,8 @@ def process(resource_id, resource_name, aspect, resource_type, drift):
         print("🔁 Ongoing — updated silently, no re-notify yet.")
 
 
-# def get_desired_state():
-#     """Read the four booleans Terraform recorded in the state file (S3)."""
-#     obj = s3.get_object(Bucket=STATE_BUCKET, Key=STATE_KEY)
-#     state = json.loads(obj["Body"].read())
-
-#     for res in state["resources"]:
-#         if res["type"] == "aws_s3_bucket_public_access_block" and res["name"] == "monitored":
-#             attrs = res["instances"][0]["attributes"]
-#             return {k: attrs[k] for k in PAB_KEYS}
-
-#     raise RuntimeError("public_access_block resource not found in state file")
-
-
-# def get_actual_state():
-#     """Read the four booleans live AWS reports right now."""
-#     resp = s3.get_public_access_block(Bucket=MONITORED_BUCKET)
-#     cfg = resp["PublicAccessBlockConfiguration"]
-#     # live API uses PascalCase; map back to the state-file snake_case names
-#     mapping = {
-#         "block_public_acls":       "BlockPublicAcls",
-#         "block_public_policy":     "BlockPublicPolicy",
-#         "ignore_public_acls":      "IgnorePublicAcls",
-#         "restrict_public_buckets": "RestrictPublicBuckets",
-#     }
-#     return {snake: cfg[pascal] for snake, pascal in mapping.items()}
-
-
-# def compare(desired, actual):
-#     """Return a list of drifted attributes: (name, desired_value, actual_value)."""
-#     drift = []
-#     for key in PAB_KEYS:
-#         if desired[key] != actual[key]:
-#             drift.append((key, desired[key], actual[key]))
-#     return drift
-
-
 def run_detection():
     """The actual work — callable from both local main() and Lambda."""
-    # desired = get_desired_state()
-    # actual = get_actual_state()
-    # print("Desired:", desired)
-    # print("Actual :", actual)
-    
-    # process(compare(desired, actual))
     i=0
     se=set()
     for resource_id, resource_name, aspect, resource_type, drift in evaluate_all():
