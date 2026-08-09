@@ -14,7 +14,7 @@ out-of-band changes within minutes, records them, and alerts — no human in the
 > reality. This is the `terraform plan -refresh-only` notion of drift.
 
 > **A note on AI assistance.** This README, along with many of the inline code
-> comments, was drafted with the help of an AI assistant, and AI was used as a
+> comments, some code for dashboard UI was drafted with the help of an AI assistant, and AI was used as a
 > thinking partner while working through the architecture and debugging. All design
 > decisions, the implementation, and the choices about what to build (and what to
 > scope out) are the author's own. The AI-assisted documentation is intended to make
