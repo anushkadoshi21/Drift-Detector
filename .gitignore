@@ -3,6 +3,15 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+deps_layer.zip
+detector.zip
+
+.terraform/
+
+layer/python/
+__pycache__/
+*.tfstate*
+
 # C extensions
 *.so
 
