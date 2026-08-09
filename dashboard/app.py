@@ -147,19 +147,30 @@ def attr_line(a):
 
 
 def render_aspect_card(rec):
-    firing = rec.get("status") == "FIRING"
-    cls, label = ("hot", "DRIFTING") if firing else ("ok", "RESOLVED")
-    bcls = "firing" if firing else "resolved"
+    status = rec.get("status")
+    history = rec.get("history", [])
+    firing = status == "FIRING"
+    in_sync = status == "RESOLVED" and not history      # baseline: never drifted
+
+    if firing:
+        cls, bcls, label = "hot", "firing", "DRIFTING"
+    elif in_sync:
+        cls, bcls, label = "ok", "resolved", "IN SYNC"
+    else:
+        cls, bcls, label = "ok", "resolved", "RESOLVED"
+
     st.markdown(f'<div class="dd-aspect {cls}">'
                 f'<div class="dd-asphead"><span class="dd-aspname">{rec.get("aspect","—")}</span>'
                 f'<span class="dd-badge {bcls}">{label}</span></div>', unsafe_allow_html=True)
+
     if firing:
         meta = f"first seen {fmt_ts(rec.get('first_seen'))} · last checked {fmt_ts(rec.get('last_seen'))} · alerts {rec.get('notification_count','—')}"
+    elif in_sync:
+        meta = f"in sync since {fmt_ts(rec.get('first_seen'))} · last checked {fmt_ts(rec.get('last_seen'))}"
     else:
         meta = f"resolved {fmt_ts(rec.get('resolved_at'))} · first seen {fmt_ts(rec.get('first_seen'))}"
     st.markdown(f'<div class="dd-meta">{meta}</div>', unsafe_allow_html=True)
 
-    history = rec.get("history", [])
     if history:
         st.markdown('<div class="dd-tlhdr">Timeline</div>', unsafe_allow_html=True)
         rows = ['<div class="dd-tl">']
@@ -175,8 +186,7 @@ def render_aspect_card(rec):
         rows.append('</div>')
         st.markdown("".join(rows), unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
-
-
+    
 def render_resource_card(rtype, rname, aspects, key, show_type=False):
     hot = is_firing(aspects); nf = n_firing(aspects)
     tspan = f'<span class="dd-cardtype">{rtype}</span>' if show_type else ""
