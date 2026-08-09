@@ -10,15 +10,12 @@ Landing (problems first):
   -> "Browse all resources": type cards -> drill into a type.
 
 Run:  pip install streamlit boto3 streamlit-autorefresh ; streamlit run app.py
-MOCK_DATA=true exercises multi-type / SG add-remove rendering.
 """
 
 import os
 from datetime import datetime, timezone, timedelta
 
 import streamlit as st
-
-MOCK_DATA = os.getenv("MOCK_DATA", "false").lower() == "true"
 
 try:
     from streamlit_autorefresh import st_autorefresh
@@ -107,39 +104,8 @@ div[data-testid="stExpander"] {{ border:none !important; box-shadow:none !import
 """, unsafe_allow_html=True)
 
 
-def _mock_records():
-    t0 = datetime.now(timezone.utc)
-    def iso(m): return (t0 - timedelta(minutes=m)).isoformat()
-    pab = [{"attribute": "block_public_acls", "declared": "True", "actual": "False"},
-           {"attribute": "restrict_public_buckets", "declared": "True", "actual": "False"}]
-    sg = [{"attribute": "ingress_rule_added", "declared": None, "actual": "tcp/22/0.0.0.0/0"},
-          {"attribute": "ingress_rule_removed", "declared": "tcp/22/10.0.0.0/16", "actual": None}]
-    return [
-        {"resource_id": "bucket-a::s3_public_access_block", "resource_type": "S3 Bucket",
-         "resource_name": "bucket-a", "aspect": "s3_public_access_block", "status": "FIRING",
-         "current_attributes": pab, "first_seen": iso(120), "last_seen": iso(1), "notification_count": 3,
-         "history": [{"attributes": pab, "detected_at": iso(120), "last_seen": iso(1)}]},
-        {"resource_id": "bucket-a::s3_bucket_versioning", "resource_type": "S3 Bucket",
-         "resource_name": "bucket-a", "aspect": "s3_bucket_versioning", "status": "RESOLVED",
-         "current_attributes": [], "first_seen": iso(300), "resolved_at": iso(90),
-         "history": [{"attributes": [{"attribute": "status", "declared": "Enabled", "actual": "Suspended"}],
-                      "detected_at": iso(300), "last_seen": iso(95), "resolved_at": iso(90)}]},
-        {"resource_id": "sg-1::security_group", "resource_type": "Security Group",
-         "resource_name": "drift-detector-monitored-sg", "aspect": "security_group", "status": "FIRING",
-         "current_attributes": sg, "first_seen": iso(30), "last_seen": iso(1), "notification_count": 1,
-         "history": [{"attributes": sg, "detected_at": iso(30), "last_seen": iso(1)}]},
-        {"resource_id": "i-0abc::ec2_instance", "resource_type": "EC2 Instance",
-         "resource_name": "i-0abc123", "aspect": "ec2_instance", "status": "FIRING",
-         "current_attributes": [{"attribute": "instance_type", "declared": "t3.micro", "actual": "t3.large"}],
-         "first_seen": iso(45), "last_seen": iso(1), "notification_count": 1,
-         "history": [{"attributes": [{"attribute": "instance_type", "declared": "t3.micro", "actual": "t3.large"}],
-                      "detected_at": iso(45), "last_seen": iso(1)}]},
-    ]
-
 
 def load_records():
-    if MOCK_DATA:
-        return _mock_records()
     import boto3
     table = boto3.resource("dynamodb", region_name=AWS_REGION).Table(TABLE_NAME)
     resp = table.scan()
@@ -225,7 +191,7 @@ def render_resource_card(rtype, rname, aspects, key, show_type=False):
 
 
 # ---- page -----------------------------------------------------------------
-if HAVE_AUTOREFRESH and not MOCK_DATA:
+if HAVE_AUTOREFRESH :
     st_autorefresh(interval=REFRESH_SECONDS * 1000, key="poll")
 
 st.session_state.setdefault("sel_type", None)
@@ -235,7 +201,7 @@ def go_home():  st.session_state.sel_type = None
 now = datetime.now(timezone.utc).strftime("%b %d, %H:%M:%S UTC")
 st.markdown(f'<div class="dd-title">Drift Detector</div>'
             f'<div class="dd-sub">terraform state vs. live AWS · {now}'
-            + (" · MOCK DATA" if MOCK_DATA else "") + '</div>', unsafe_allow_html=True)
+            + '</div>', unsafe_allow_html=True)
 
 try:
     records = load_records()
